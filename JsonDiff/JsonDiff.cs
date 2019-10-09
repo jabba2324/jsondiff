@@ -16,7 +16,7 @@ namespace JsonDiff
                     (
                          false,
                          "Request Failed",
-                          "Managed body was empty"
+                          "Left was null"
                     )
                 };
             }
@@ -29,7 +29,7 @@ namespace JsonDiff
                     (
                          false,
                          "Request Failed",
-                         "Managed2 body was empty"
+                         "Right was null"
                     )
                 };
             }
@@ -41,21 +41,21 @@ namespace JsonDiff
             (
                  true,
                  p,
-                 $"Both Managed & Managed2 have property '{p}'"
+                 $"Both Left & Right have property '{p}'"
             ));
 
             var leftFailed = leftObjectMembers.Except(rightObjectMembers).Select(p => new JsonDiffResult
             (
                 false,
                 p,
-                $"Error: Managed has property '{p}' but Managed2 does not"
+                $"Error: Left has property '{p}' but Right does not"
             ));
 
             var rightFailed = rightObjectMembers.Except(leftObjectMembers).Select(p => new JsonDiffResult
             (
                 false,
                 p,
-                $"Error: Managed2 has property '{p}' but Managed does not"
+                $"Error: Right has property '{p}' but Left does not"
             ));
 
             return new List<JsonDiffResult>().Concat(passed).Concat(leftFailed).Concat(rightFailed);
@@ -94,7 +94,7 @@ namespace JsonDiff
                             new JsonDiffResult
                             (
                                   false,
-                                  $"Array {n} has {leftArray.Count} items in Managed and {rightArray.Count} items in Managed2",
+                                  $"Array {n} has {leftArray.Count} items in Left and {rightArray.Count} items in Right",
                                   n
                             )
                         };
@@ -128,7 +128,7 @@ namespace JsonDiff
                     (
                          false,
                          propertyName,
-                     $"Error: Property '{propertyName}' has value 'null' in Managed and '{right}' in Managed2"
+                     $"Error: Property '{propertyName}' has value 'null' in Left and '{right}' in Right"
                     )
                 }; 
             }
@@ -141,7 +141,7 @@ namespace JsonDiff
                         (
                             false,
                             propertyName,
-                    $"Error: Property '{propertyName}' has value '{left}' in Managed and 'null' in Managed2"
+                    $"Error: Property '{propertyName}' has value '{left}' in Left and 'null' in Right"
                         )
                     };
             }
@@ -154,7 +154,7 @@ namespace JsonDiff
                     (
                         true,
                         propertyName,
-                $"Property '{propertyName}' has value 'null' for both Managed and Managed2"
+                $"Property '{propertyName}' has value 'null' for both Left and Right"
                     )
                 };
             }
@@ -170,7 +170,7 @@ namespace JsonDiff
                 (
                     true,
                       propertyName,
-                      $"Property '{propertyName}' has value '{left}' for both Managed and Managed2"
+                      $"Property '{propertyName}' has value '{left}' for both Left and Right"
                 );
             }
 
@@ -179,7 +179,7 @@ namespace JsonDiff
                false,
                  propertyName,
 
-                    $"Error: Property '{propertyName}' has value '{left}' in Managed and '{right}' in Managed2"
+                    $"Error: Property '{propertyName}' has value '{left}' in Left and '{right}' in Right"
            );
         }
 
