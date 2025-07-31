@@ -1,0 +1,15 @@
+{
+  "name": "Alice",
+  "age": 25,
+  "address": {
+    "street": "456 Oak Ave",
+    "city": "Chicago",
+    "zip": "60601"
+  },
+  "hobbies": [
+    "painting",
+    "hiking",
+    "cooking"
+  ],
+  "active": false
+}

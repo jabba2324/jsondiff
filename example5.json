@@ -1,0 +1,16 @@
+{
+  "name": "Bob",
+  "age": 40,
+  "address": {
+    "street": "789 Pine St",
+    "city": "Seattle",
+    "state": "WA",
+    "country": "USA"
+  },
+  "hobbies": [
+    "fishing",
+    "camping"
+  ],
+  "active": true,
+  "email": "bob@example.com"
+}
