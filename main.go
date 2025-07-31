@@ -17,6 +17,9 @@ func main() {
 	keysOnlyPtr := flag.Bool("keys-only", false, "Only compare keys, ignore values")
 	ignoreCasePtr := flag.Bool("ignore-case", false, "Ignore case when comparing keys")
 	ignoreCaseValuesPtr := flag.Bool("ignore-case-values", false, "Ignore case when comparing string values")
+	ignoreNumericTypePtr := flag.Bool("ignore-numeric-type", false, "Ignore numeric types (e.g., 1 == \"1\" == \"1.0\")")
+	ignoreBooleanTypePtr := flag.Bool("ignore-boolean-type", false, "Ignore boolean types (e.g., true == \"true\")")
+	ignoreNullValuesPtr := flag.Bool("ignore-null", false, "Ignore null values (e.g., \"Harry Potter\" == null)")
 	
 	// Parse flags
 	flag.Parse()
@@ -48,7 +51,7 @@ func main() {
 	}
 
 	// Get differences based on options
-	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *keysOnlyPtr)
+	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr)
 	
 	// Check if files are identical
 	if len(differences) == 0 {

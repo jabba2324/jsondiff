@@ -11,7 +11,12 @@ A simple command-line tool to compare two JSON files and show their differences.
   - Value mismatches
   - Array length differences
   - Line-by-line comparison
-- Modular code organization with separate files for different functionalities
+- Flexible comparison options:
+  - Case-insensitive key comparison
+  - Case-insensitive string value comparison
+  - Type-agnostic numeric comparison (1 == "1")
+  - Type-agnostic boolean comparison (true == "true")
+  - Null value comparison ("Harry Potter" == null)
 - Comprehensive unit tests
 
 ## Installation
@@ -38,14 +43,66 @@ go build -o jsondiff
 - `-quiet`: Only show if files differ via exit code (0 for identical, 1 for different)
 - `-keys-only`: Only compare keys/structure, ignore values
 - `-ignore-case`: Ignore case when comparing keys
+- `-ignore-case-values`: Ignore case when comparing string values
+- `-ignore-numeric-type`: Ignore numeric types (e.g., 1 == "1" == "1.0")
+- `-ignore-boolean-type`: Ignore boolean types (e.g., true == "true")
+- `-ignore-null`: Ignore null values (e.g., "Harry Potter" == null)
 
-## Example
+## Examples
+
+### Basic Comparison
 
 ```bash
 ./jsondiff example1.json example2.json
 ```
 
+### Using Case-Insensitive Comparison
+
+```bash
+./jsondiff -ignore-case-values example1.json example7.json
+```
+
+This will ignore case differences in string values (e.g., "John" equals "JOHN").
+
 Output:
+```
+Validated JSON from example1.json
+Validated JSON from example7.json
+The JSON files are identical.
+```
+
+### Using Null Value Comparison
+
+```bash
+./jsondiff -ignore-null example1.json example10.json
+```
+
+This will treat null values as equal to any value (e.g., "Harry Potter" equals null).
+
+Output:
+```
+Validated JSON from example1.json
+Validated JSON from example10.json
+The JSON files are identical.
+```
+
+### Using Type-Agnostic Comparison
+
+```bash
+./jsondiff -ignore-numeric-type -ignore-boolean-type example1.json example8.json
+```
+
+This will treat numeric and boolean values as equal regardless of their type (e.g., `1` equals `"1"` and `true` equals `"true"`).
+
+Output:
+```
+Validated JSON from example1.json
+Validated JSON from example8.json
+The JSON files are identical.
+```
+
+### Output Example for Basic Comparison
+
 ```
 Validated JSON from example1.json
 Validated JSON from example2.json

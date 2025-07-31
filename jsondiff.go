@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -20,9 +21,12 @@ type JSONFile struct {
 
 // CompareOptions contains options for JSON comparison
 type CompareOptions struct {
-	IgnoreCase       bool // If true, key comparisons will be case-insensitive
-	IgnoreCaseValues bool // If true, string value comparisons will be case-insensitive
-	KeysOnly         bool // If true, only compare keys/structure, not values
+	IgnoreCase        bool // If true, key comparisons will be case-insensitive
+	IgnoreCaseValues  bool // If true, string value comparisons will be case-insensitive
+	IgnoreNumericType bool // If true, numeric types are compared by value, not type (e.g., 1 == "1" == "1.0")
+	IgnoreBooleanType bool // If true, boolean types are compared by value, not type (e.g., true == "true")
+	IgnoreNullValues  bool // If true, null values are considered equal to any value
+	KeysOnly          bool // If true, only compare keys/structure, not values
 }
 
 // ReadAndValidateJSON reads a JSON file, validates it, and returns the parsed object and pretty-printed string
@@ -58,11 +62,14 @@ func ReadAndValidateJSON(filePath string, concise bool) (*JSONFile, error) {
 
 // FindDifferences recursively compares two JSON objects and returns a list of differences
 // Options control whether to ignore case and whether to compare only keys
-func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, keysOnly bool) []string {
+func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, ignoreNumericType, ignoreBooleanType, ignoreNullValues, keysOnly bool) []string {
 	return findDifferencesWithOptions(obj1, obj2, path, CompareOptions{
-		IgnoreCase:       ignoreCase,
-		IgnoreCaseValues: ignoreCaseValues,
-		KeysOnly:         keysOnly,
+		IgnoreCase:        ignoreCase,
+		IgnoreCaseValues:  ignoreCaseValues,
+		IgnoreNumericType: ignoreNumericType,
+		IgnoreBooleanType: ignoreBooleanType,
+		IgnoreNullValues:  ignoreNullValues,
+		KeysOnly:          keysOnly,
 	})
 }
 
@@ -74,6 +81,102 @@ func isComplex(val interface{}) bool {
 	default:
 		return false
 	}
+}
+
+// compareBooleanValues compares two values as booleans, ignoring their original types
+// Returns true if both values can be converted to booleans and are equal
+func compareBooleanValues(val1, val2 interface{}) (bool, bool) {
+	// Extract boolean values
+	bool1, isBool1 := val1.(bool)
+	boolStr1, isBoolStr1 := val1.(string)
+	bool2, isBool2 := val2.(bool)
+	boolStr2, isBoolStr2 := val2.(string)
+	
+	// Check if we're comparing boolean values
+	if !isBool1 && !isBoolStr1 && !isBool2 && !isBoolStr2 {
+		// Not comparing booleans
+		return false, false
+	}
+	
+	// Convert to boolean values
+	var b1, b2 bool
+	var ok1, ok2 bool
+	
+	if isBool1 {
+		b1 = bool1
+		ok1 = true
+	} else if isBoolStr1 {
+		lowerStr := strings.ToLower(boolStr1)
+		if lowerStr == "true" {
+			b1 = true
+			ok1 = true
+		} else if lowerStr == "false" {
+			b1 = false
+			ok1 = true
+		}
+	}
+	
+	if isBool2 {
+		b2 = bool2
+		ok2 = true
+	} else if isBoolStr2 {
+		lowerStr := strings.ToLower(boolStr2)
+		if lowerStr == "true" {
+			b2 = true
+			ok2 = true
+		} else if lowerStr == "false" {
+			b2 = false
+			ok2 = true
+		}
+	}
+	
+	// If both values could be converted to booleans, compare them
+	if ok1 && ok2 {
+		return b1 == b2, true
+	}
+	
+	// Couldn't convert both values to booleans
+	return false, false
+}
+
+// convertToFloat64 attempts to convert a value to float64
+// Returns the converted value and a boolean indicating success
+func convertToFloat64(val interface{}) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case string:
+		// Try to parse string as number
+		f, err := strconv.ParseFloat(v, 64)
+		if err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+// compareNumericValues compares two values as numbers, ignoring their original types
+// Returns true if both values can be converted to numbers and are equal
+func compareNumericValues(val1, val2 interface{}) bool {
+	// Try to convert both values to float64
+	num1, ok1 := convertToFloat64(val1)
+	num2, ok2 := convertToFloat64(val2)
+
+	// Compare the numeric values if both conversions succeeded
+	if ok1 && ok2 {
+		return num1 == num2
+	}
+	
+	// Values couldn't be compared as numbers
+	return false
 }
 
 // findDifferencesWithOptions is the internal implementation that handles all comparison options
@@ -187,6 +290,30 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 					}
 				}
 				
+				// Special handling for null values
+				if options.IgnoreNullValues && !options.KeysOnly {
+					if val1 == nil || val2 == nil {
+						// If either value is null, consider them equal
+						continue
+					}
+				}
+				
+				// Special handling for boolean types
+				if options.IgnoreBooleanType && !options.KeysOnly {
+					if equal, ok := compareBooleanValues(val1, val2); ok && equal {
+						// Values are equal when compared as booleans
+						continue
+					}
+				}
+				
+				// Special handling for numeric types
+				if options.IgnoreNumericType && !options.KeysOnly {
+					if compareNumericValues(val1, val2) {
+						// Values are equal when compared as numbers
+						continue
+					}
+				}
+				
 				if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
 					// Only compare values if not in keys-only mode
 					if isComplex(val1) {
@@ -234,6 +361,30 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 				}
 			}
 			
+			// Special handling for null values
+			if options.IgnoreNullValues && !options.KeysOnly {
+				if val1 == nil || val2 == nil {
+					// If either value is null, consider them equal
+					continue
+				}
+			}
+			
+			// Special handling for boolean types
+			if options.IgnoreBooleanType && !options.KeysOnly {
+				if equal, ok := compareBooleanValues(val1, val2); ok && equal {
+					// Values are equal when compared as booleans
+					continue
+				}
+			}
+			
+			// Special handling for numeric types
+			if options.IgnoreNumericType && !options.KeysOnly {
+				if compareNumericValues(val1, val2) {
+					// Values are equal when compared as numbers
+					continue
+				}
+			}
+			
 			if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
 				// Only compare values if not in keys-only mode
 				if isComplex(val1) {
@@ -250,12 +401,36 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 	default:
 		// For primitive types, just compare values if not in keys-only mode
 		if !options.KeysOnly {
+			// Special handling for null values
+			if options.IgnoreNullValues {
+				if obj1 == nil || obj2 == nil {
+					// If either value is null, consider them equal
+					return differences
+				}
+			}
+			
 			// Special handling for strings when IgnoreCaseValues is true
 			if options.IgnoreCaseValues {
 				str1, isStr1 := obj1.(string)
 				str2, isStr2 := obj2.(string)
 				if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
 					// Strings are equal when ignoring case
+					return differences
+				}
+			}
+			
+			// Special handling for boolean types
+			if options.IgnoreBooleanType {
+				if equal, ok := compareBooleanValues(obj1, obj2); ok && equal {
+					// Values are equal when compared as booleans
+					return differences
+				}
+			}
+			
+			// Special handling for numeric types
+			if options.IgnoreNumericType {
+				if compareNumericValues(obj1, obj2) {
+					// Values are equal when compared as numbers
 					return differences
 				}
 			}
