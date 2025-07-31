@@ -1,0 +1,15 @@
+{
+  "name": "JOHN",
+  "age": 30,
+  "address": {
+    "street": "123 Main St",
+    "city": "NEW YORK",
+    "zip": "10001"
+  },
+  "hobbies": [
+    "READING",
+    "CYCLING",
+    "COOKING"
+  ],
+  "active": true
+}

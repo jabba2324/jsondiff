@@ -20,8 +20,9 @@ type JSONFile struct {
 
 // CompareOptions contains options for JSON comparison
 type CompareOptions struct {
-	IgnoreCase bool // If true, key comparisons will be case-insensitive
-	KeysOnly   bool // If true, only compare keys/structure, not values
+	IgnoreCase       bool // If true, key comparisons will be case-insensitive
+	IgnoreCaseValues bool // If true, string value comparisons will be case-insensitive
+	KeysOnly         bool // If true, only compare keys/structure, not values
 }
 
 // ReadAndValidateJSON reads a JSON file, validates it, and returns the parsed object and pretty-printed string
@@ -57,8 +58,12 @@ func ReadAndValidateJSON(filePath string, concise bool) (*JSONFile, error) {
 
 // FindDifferences recursively compares two JSON objects and returns a list of differences
 // Options control whether to ignore case and whether to compare only keys
-func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, keysOnly bool) []string {
-	return findDifferencesWithOptions(obj1, obj2, path, CompareOptions{IgnoreCase: ignoreCase, KeysOnly: keysOnly})
+func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, keysOnly bool) []string {
+	return findDifferencesWithOptions(obj1, obj2, path, CompareOptions{
+		IgnoreCase:       ignoreCase,
+		IgnoreCaseValues: ignoreCaseValues,
+		KeysOnly:         keysOnly,
+	})
 }
 
 // isComplex checks if a value is a complex type (map or array)
@@ -171,18 +176,30 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 				differences = append(differences, fmt.Sprintf("%s: key exists only in second file", newPath))
 			} else if !ok2 {
 				differences = append(differences, fmt.Sprintf("%s: key exists only in first file", newPath))
-			} else if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
-				// Only compare values if not in keys-only mode
-				if isComplex(val1) {
-					// Recursively compare nested structures
-					differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
-				} else {
-					// For primitive types, just compare values
-					differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", newPath, val1, val2))
+			} else {
+				// Special handling for strings when IgnoreCaseValues is true
+				if options.IgnoreCaseValues && !options.KeysOnly {
+					str1, isStr1 := val1.(string)
+					str2, isStr2 := val2.(string)
+					if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
+						// Strings are equal when ignoring case
+						continue
+					}
 				}
-			} else if options.KeysOnly && isComplex(val1) {
-				// In keys-only mode, still check structure of nested objects
-				differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
+				
+				if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
+					// Only compare values if not in keys-only mode
+					if isComplex(val1) {
+						// Recursively compare nested structures
+						differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
+					} else {
+						// For primitive types, just compare values
+						differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", newPath, val1, val2))
+					}
+				} else if options.KeysOnly && isComplex(val1) {
+					// In keys-only mode, still check structure of nested objects
+					differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
+				}
 			}
 		}
 
@@ -207,6 +224,16 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 			val1 := arr1[i]
 			val2 := arr2[i]
 			
+			// Special handling for strings when IgnoreCaseValues is true
+			if options.IgnoreCaseValues && !options.KeysOnly {
+				str1, isStr1 := val1.(string)
+				str2, isStr2 := val2.(string)
+				if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
+					// Strings are equal when ignoring case, continue to next element
+					continue
+				}
+			}
+			
 			if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
 				// Only compare values if not in keys-only mode
 				if isComplex(val1) {
@@ -222,8 +249,21 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 
 	default:
 		// For primitive types, just compare values if not in keys-only mode
-		if !options.KeysOnly && !reflect.DeepEqual(obj1, obj2) {
-			differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", path, obj1, obj2))
+		if !options.KeysOnly {
+			// Special handling for strings when IgnoreCaseValues is true
+			if options.IgnoreCaseValues {
+				str1, isStr1 := obj1.(string)
+				str2, isStr2 := obj2.(string)
+				if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
+					// Strings are equal when ignoring case
+					return differences
+				}
+			}
+			
+			// Standard comparison for non-strings or when not ignoring case
+			if !reflect.DeepEqual(obj1, obj2) {
+				differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", path, obj1, obj2))
+			}
 		}
 	}
 

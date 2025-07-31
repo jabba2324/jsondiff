@@ -21,7 +21,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test key case sensitivity
-	diffs := FindDifferences(file1.Data, file6.Data, "", false, false)
+	diffs := FindDifferences(file1.Data, file6.Data, "", false, false, false)
 	if len(diffs) == 0 {
 		t.Error("Expected differences due to case-sensitive keys, but found none")
 	}
@@ -50,7 +50,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test case-insensitive comparison
-	ignoreCaseDiffs := FindDifferences(file1.Data, file6.Data, "", true, false)
+	ignoreCaseDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false)
 	
 	// Should only find differences in values, not in keys
 	for _, diff := range ignoreCaseDiffs {
@@ -62,7 +62,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test case-insensitive key-only comparison
-	keyDiffs := FindDifferences(file1.Data, file6.Data, "", true, true)
+	keyDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, true)
 	if len(keyDiffs) > 0 {
 		t.Errorf("Expected structures to be equal in case-insensitive mode, but found differences: %v", keyDiffs)
 	}
@@ -95,33 +95,41 @@ func TestFindDifferences(t *testing.T) {
 		t.Fatalf("Failed to read example5.json: %v", err)
 	}
 
+	file7, err := ReadAndValidateJSON("example7.json", true)
+	if err != nil {
+		t.Fatalf("Failed to read example7.json: %v", err)
+	}
+
 	tests := []struct {
-		name           string
-		obj1           interface{}
-		obj2           interface{}
-		ignoreCase     bool
-		keysOnly       bool
-		expectDiff     bool
-		expectedDiffs  int
-		expectedValues []string
+		name             string
+		obj1             interface{}
+		obj2             interface{}
+		ignoreCase       bool
+		ignoreCaseValues bool
+		keysOnly         bool
+		expectDiff       bool
+		expectedDiffs    int
+		expectedValues   []string
 	}{
 		// Full comparison tests
 		{
-			name:       "Identical files",
-			obj1:       file1.Data,
-			obj2:       file3.Data,
-			ignoreCase: false,
-			keysOnly:   false,
-			expectDiff: false,
+			name:             "Identical files",
+			obj1:             file1.Data,
+			obj2:             file3.Data,
+			ignoreCase:       false,
+			ignoreCaseValues: false,
+			keysOnly:         false,
+			expectDiff:       false,
 		},
 		{
-			name:          "Different values",
-			obj1:          file1.Data,
-			obj2:          file2.Data,
-			ignoreCase:    false,
-			keysOnly:      false,
-			expectDiff:    true,
-			expectedDiffs: 4,
+			name:             "Different values",
+			obj1:             file1.Data,
+			obj2:             file2.Data,
+			ignoreCase:       false,
+			ignoreCaseValues: false,
+			keysOnly:         false,
+			expectDiff:       true,
+			expectedDiffs:    4,
 			expectedValues: []string{
 				"name: value mismatch",
 				"age: value mismatch",
@@ -130,13 +138,14 @@ func TestFindDifferences(t *testing.T) {
 			},
 		},
 		{
-			name:          "Different structure",
-			obj1:          file1.Data,
-			obj2:          file5.Data,
-			ignoreCase:    false,
-			keysOnly:      false,
-			expectDiff:    true,
-			expectedDiffs: 11,
+			name:             "Different structure",
+			obj1:             file1.Data,
+			obj2:             file5.Data,
+			ignoreCase:       false,
+			ignoreCaseValues: false,
+			keysOnly:         false,
+			expectDiff:       true,
+			expectedDiffs:    11,
 			expectedValues: []string{
 				"name: value mismatch",
 				"age: value mismatch",
@@ -151,23 +160,35 @@ func TestFindDifferences(t *testing.T) {
 				"email: key exists only in second file",
 			},
 		},
+		// Case-insensitive value comparison test
+		{
+			name:             "Case-insensitive value comparison",
+			obj1:             file1.Data,
+			obj2:             file7.Data,
+			ignoreCase:       false,
+			ignoreCaseValues: true,
+			keysOnly:         false,
+			expectDiff:       false,
+		},
 		// Keys-only comparison tests
 		{
-			name:       "Same structure different values",
-			obj1:       file1.Data,
-			obj2:       file4.Data,
-			ignoreCase: false,
-			keysOnly:   true,
-			expectDiff: false,
+			name:             "Same structure different values",
+			obj1:             file1.Data,
+			obj2:             file4.Data,
+			ignoreCase:       false,
+			ignoreCaseValues: false,
+			keysOnly:         true,
+			expectDiff:       false,
 		},
 		{
-			name:          "Different structure keys-only",
-			obj1:          file1.Data,
-			obj2:          file5.Data,
-			ignoreCase:    false,
-			keysOnly:      true,
-			expectDiff:    true,
-			expectedDiffs: 5,
+			name:             "Different structure keys-only",
+			obj1:             file1.Data,
+			obj2:             file5.Data,
+			ignoreCase:       false,
+			ignoreCaseValues: false,
+			keysOnly:         true,
+			expectDiff:       true,
+			expectedDiffs:    5,
 			expectedValues: []string{
 				"address.country: key exists only in second file",
 				"address.state: key exists only in second file",
@@ -180,10 +201,10 @@ func TestFindDifferences(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			diffs := FindDifferences(tt.obj1, tt.obj2, "", tt.ignoreCase, tt.keysOnly)
+			diffs := FindDifferences(tt.obj1, tt.obj2, "", tt.ignoreCase, tt.ignoreCaseValues, tt.keysOnly)
 			
 			if (len(diffs) > 0) != tt.expectDiff {
-				t.Errorf("Expected diff: %v, got: %v", tt.expectDiff, len(diffs) > 0)
+				t.Errorf("Expected diff: %v, got: %v, differences: %v", tt.expectDiff, len(diffs) > 0, diffs)
 			}
 
 			if tt.expectedDiffs > 0 && len(diffs) != tt.expectedDiffs {
