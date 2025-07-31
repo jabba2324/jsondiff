@@ -17,6 +17,7 @@ A simple command-line tool to compare two JSON files and show their differences.
   - Type-agnostic numeric comparison (1 == "1")
   - Type-agnostic boolean comparison (true == "true")
   - Null value comparison ("Harry Potter" == null)
+  - Regex pattern matching for specific keys
 - Comprehensive unit tests
 
 ## Installation
@@ -47,6 +48,7 @@ go build -o jsondiff
 - `-ignore-numeric-type`: Ignore numeric types (e.g., 1 == "1" == "1.0")
 - `-ignore-boolean-type`: Ignore boolean types (e.g., true == "true")
 - `-ignore-null`: Ignore null values (e.g., "Harry Potter" == null)
+- `-regex-match`: Use regex matching on specific key (format: key:pattern)
 
 ## Examples
 
@@ -68,6 +70,21 @@ Output:
 ```
 Validated JSON from example1.json
 Validated JSON from example7.json
+The JSON files are identical.
+```
+
+### Using Regex Pattern Matching
+
+```bash
+./jsondiff -regex-match "id:[A-Z]+-\d+-[A-Z]+" example11.json example12.json
+```
+
+This will use regex pattern matching on the "id" field, considering values equal if they both match the pattern (e.g., "ABC-123-XYZ" and "DEF-456-UVW" both match the pattern "[A-Z]+-\d+-[A-Z]+").
+
+Output:
+```
+Validated JSON from example11.json
+Validated JSON from example12.json
 The JSON files are identical.
 ```
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,12 +22,13 @@ type JSONFile struct {
 
 // CompareOptions contains options for JSON comparison
 type CompareOptions struct {
-	IgnoreCase        bool // If true, key comparisons will be case-insensitive
-	IgnoreCaseValues  bool // If true, string value comparisons will be case-insensitive
-	IgnoreNumericType bool // If true, numeric types are compared by value, not type (e.g., 1 == "1" == "1.0")
-	IgnoreBooleanType bool // If true, boolean types are compared by value, not type (e.g., true == "true")
-	IgnoreNullValues  bool // If true, null values are considered equal to any value
-	KeysOnly          bool // If true, only compare keys/structure, not values
+	IgnoreCase        bool              // If true, key comparisons will be case-insensitive
+	IgnoreCaseValues  bool              // If true, string value comparisons will be case-insensitive
+	IgnoreNumericType bool              // If true, numeric types are compared by value, not type (e.g., 1 == "1" == "1.0")
+	IgnoreBooleanType bool              // If true, boolean types are compared by value, not type (e.g., true == "true")
+	IgnoreNullValues  bool              // If true, null values are considered equal to any value
+	KeysOnly          bool              // If true, only compare keys/structure, not values
+	RegexMatches      map[string]string // Map of key paths to regex patterns for value matching
 }
 
 // ReadAndValidateJSON reads a JSON file, validates it, and returns the parsed object and pretty-printed string
@@ -62,7 +64,7 @@ func ReadAndValidateJSON(filePath string, concise bool) (*JSONFile, error) {
 
 // FindDifferences recursively compares two JSON objects and returns a list of differences
 // Options control whether to ignore case and whether to compare only keys
-func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, ignoreNumericType, ignoreBooleanType, ignoreNullValues, keysOnly bool) []string {
+func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, ignoreNumericType, ignoreBooleanType, ignoreNullValues, keysOnly bool, regexMatches map[string]string) []string {
 	return findDifferencesWithOptions(obj1, obj2, path, CompareOptions{
 		IgnoreCase:        ignoreCase,
 		IgnoreCaseValues:  ignoreCaseValues,
@@ -70,6 +72,7 @@ func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCase
 		IgnoreBooleanType: ignoreBooleanType,
 		IgnoreNullValues:  ignoreNullValues,
 		KeysOnly:          keysOnly,
+		RegexMatches:      regexMatches,
 	})
 }
 
@@ -177,6 +180,27 @@ func compareNumericValues(val1, val2 interface{}) bool {
 	
 	// Values couldn't be compared as numbers
 	return false
+}
+
+// matchesRegex checks if both values match the given regex pattern
+// Returns true if both values are strings and match the pattern
+func matchesRegex(val1, val2 interface{}, pattern string) (bool, error) {
+	// Check if both values are strings
+	str1, isStr1 := val1.(string)
+	str2, isStr2 := val2.(string)
+	
+	if !isStr1 || !isStr2 {
+		return false, nil // Not comparing strings
+	}
+	
+	// Compile the regex pattern
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, err
+	}
+	
+	// Check if both strings match the pattern
+	return re.MatchString(str1) && re.MatchString(str2), nil
 }
 
 // findDifferencesWithOptions is the internal implementation that handles all comparison options
@@ -298,6 +322,19 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 					}
 				}
 				
+				// Special handling for regex matching
+				if !options.KeysOnly && len(options.RegexMatches) > 0 {
+					// Check if this key path has a regex pattern
+					if pattern, ok := options.RegexMatches[newPath]; ok {
+						// Check if both values match the pattern
+						matches, err := matchesRegex(val1, val2, pattern)
+						if err == nil && matches {
+							// Both values match the pattern, consider them equal
+							continue
+						}
+					}
+				}
+				
 				// Special handling for boolean types
 				if options.IgnoreBooleanType && !options.KeysOnly {
 					if equal, ok := compareBooleanValues(val1, val2); ok && equal {
@@ -366,6 +403,19 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 				if val1 == nil || val2 == nil {
 					// If either value is null, consider them equal
 					continue
+				}
+			}
+			
+			// Special handling for regex matching
+			if !options.KeysOnly && len(options.RegexMatches) > 0 {
+				// Check if this key path has a regex pattern
+				if pattern, ok := options.RegexMatches[newPath]; ok {
+					// Check if both values match the pattern
+					matches, err := matchesRegex(val1, val2, pattern)
+					if err == nil && matches {
+						// Both values match the pattern, consider them equal
+						continue
+					}
 				}
 			}
 			

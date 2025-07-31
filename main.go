@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -20,6 +21,7 @@ func main() {
 	ignoreNumericTypePtr := flag.Bool("ignore-numeric-type", false, "Ignore numeric types (e.g., 1 == \"1\" == \"1.0\")")
 	ignoreBooleanTypePtr := flag.Bool("ignore-boolean-type", false, "Ignore boolean types (e.g., true == \"true\")")
 	ignoreNullValuesPtr := flag.Bool("ignore-null", false, "Ignore null values (e.g., \"Harry Potter\" == null)")
+	regexMatchPtr := flag.String("regex-match", "", "Use regex matching on specific key (format: key:pattern)")
 	
 	// Parse flags
 	flag.Parse()
@@ -50,8 +52,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Parse regex match option
+	regexMatches := make(map[string]string)
+	if *regexMatchPtr != "" {
+		// Split the regex match option into key and pattern
+		parts := strings.SplitN(*regexMatchPtr, ":", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			pattern := parts[1]
+			regexMatches[key] = pattern
+		} else {
+			fmt.Println("Invalid regex match format. Expected format: key:pattern")
+			os.Exit(1)
+		}
+	}
+
 	// Get differences based on options
-	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr)
+	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr, regexMatches)
 	
 	// Check if files are identical
 	if len(differences) == 0 {

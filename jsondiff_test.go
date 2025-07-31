@@ -21,7 +21,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test key case sensitivity
-	diffs := FindDifferences(file1.Data, file6.Data, "", false, false, false, false, false, false)
+	diffs := FindDifferences(file1.Data, file6.Data, "", false, false, false, false, false, false, nil)
 	if len(diffs) == 0 {
 		t.Error("Expected differences due to case-sensitive keys, but found none")
 	}
@@ -50,7 +50,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test case-insensitive comparison
-	ignoreCaseDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, false)
+	ignoreCaseDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, false, nil)
 	
 	// Should only find differences in values, not in keys
 	for _, diff := range ignoreCaseDiffs {
@@ -62,7 +62,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test case-insensitive key-only comparison
-	keyDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, true)
+	keyDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, true, nil)
 	if len(keyDiffs) > 0 {
 		t.Errorf("Expected structures to be equal in case-insensitive mode, but found differences: %v", keyDiffs)
 	}
@@ -115,6 +115,16 @@ func TestFindDifferences(t *testing.T) {
 		t.Fatalf("Failed to read example10.json: %v", err)
 	}
 
+	file11, err := ReadAndValidateJSON("example11.json", true)
+	if err != nil {
+		t.Fatalf("Failed to read example11.json: %v", err)
+	}
+
+	file12, err := ReadAndValidateJSON("example12.json", true)
+	if err != nil {
+		t.Fatalf("Failed to read example12.json: %v", err)
+	}
+
 	tests := []struct {
 		name              string
 		obj1              interface{}
@@ -124,6 +134,7 @@ func TestFindDifferences(t *testing.T) {
 		ignoreNumericType bool
 		ignoreBooleanType bool
 		ignoreNullValues  bool
+		regexMatches      map[string]string
 		keysOnly          bool
 		expectDiff        bool
 		expectedDiffs     int
@@ -139,6 +150,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        false,
 		},
@@ -151,6 +163,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        true,
 			expectedDiffs:     4,
@@ -170,6 +183,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        true,
 			expectedDiffs:     11,
@@ -197,6 +211,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        false,
 		},
@@ -210,6 +225,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: true,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        false,
 		},
@@ -223,6 +239,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: true,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        false,
 		},
@@ -236,6 +253,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  true,
+			regexMatches:      nil,
 			keysOnly:          false,
 			expectDiff:        false,
 		},
@@ -249,6 +267,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          true,
 			expectDiff:        false,
 		},
@@ -261,6 +280,7 @@ func TestFindDifferences(t *testing.T) {
 			ignoreNumericType: false,
 			ignoreBooleanType: false,
 			ignoreNullValues:  false,
+			regexMatches:      nil,
 			keysOnly:          true,
 			expectDiff:        true,
 			expectedDiffs:     5,
@@ -272,11 +292,25 @@ func TestFindDifferences(t *testing.T) {
 				"hobbies: array length mismatch",
 			},
 		},
+		// Regex match test
+		{
+			name:              "Regex match comparison",
+			obj1:              file11.Data,
+			obj2:              file12.Data,
+			ignoreCase:        false,
+			ignoreCaseValues:  false,
+			ignoreNumericType: false,
+			ignoreBooleanType: false,
+			ignoreNullValues:  false,
+			regexMatches:      map[string]string{"id": "[A-Z]+-\\d+-[A-Z]+"},
+			keysOnly:          false,
+			expectDiff:        false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			diffs := FindDifferences(tt.obj1, tt.obj2, "", tt.ignoreCase, tt.ignoreCaseValues, tt.ignoreNumericType, tt.ignoreBooleanType, tt.ignoreNullValues, tt.keysOnly)
+			diffs := FindDifferences(tt.obj1, tt.obj2, "", tt.ignoreCase, tt.ignoreCaseValues, tt.ignoreNumericType, tt.ignoreBooleanType, tt.ignoreNullValues, tt.keysOnly, tt.regexMatches)
 			
 			if (len(diffs) > 0) != tt.expectDiff {
 				t.Errorf("Expected diff: %v, got: %v, differences: %v", tt.expectDiff, len(diffs) > 0, diffs)
