@@ -1,3 +1,6 @@
+// Copyright (c) 2023 Chris Sewell
+// Licensed under the MIT License
+
 package main
 
 import (
