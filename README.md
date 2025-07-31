@@ -14,7 +14,7 @@ A simple command-line tool to compare two JSON files and show their differences.
 - Flexible comparison options:
   - Case-insensitive key comparison
   - Case-insensitive string value comparison
-  - Type-agnostic numeric comparison (1 == "1")
+  - Type-agnostic numeric comparison (1 == "1" == "1.0" == 1.0)
   - Type-agnostic boolean comparison (true == "true")
   - Null value comparison ("Harry Potter" == null)
   - Regex pattern matching for specific keys
@@ -45,84 +45,90 @@ go build -o jsondiff
 - `-keys-only`: Only compare keys/structure, ignore values
 - `-ignore-case`: Ignore case when comparing keys
 - `-ignore-case-values`: Ignore case when comparing string values
-- `-ignore-numeric-type`: Ignore numeric types (e.g., 1 == "1" == "1.0")
+- `-ignore-numeric-type`: Ignore numeric types (e.g., 1 == "1" == "1.0" == 1.0)
 - `-ignore-boolean-type`: Ignore boolean types (e.g., true == "true")
 - `-ignore-null`: Ignore null values (e.g., "Harry Potter" == null)
-- `-regex-match`: Use regex matching on specific key (format: key:pattern)
+- `-regex-match`: Use regex matching on specific key (format: key:pattern), can be specified multiple times
 
 ## Examples
 
 ### Basic Comparison
 
 ```bash
-./jsondiff example1.json example2.json
+./jsondiff examples/example1.json examples/example2.json
 ```
 
 ### Using Case-Insensitive Comparison
 
 ```bash
-./jsondiff -ignore-case-values example1.json example7.json
+./jsondiff -ignore-case-values examples/example1.json examples/example7.json
 ```
 
 This will ignore case differences in string values (e.g., "John" equals "JOHN").
 
 Output:
 ```
-Validated JSON from example1.json
-Validated JSON from example7.json
+Validated JSON from examples/example1.json
+Validated JSON from examples/example7.json
 The JSON files are identical.
 ```
 
 ### Using Regex Pattern Matching
 
 ```bash
-./jsondiff -regex-match "id:[A-Z]+-\d+-[A-Z]+" example11.json example12.json
+./jsondiff -regex-match "id:[A-Z]+-\d+-[A-Z]+" examples/example11.json examples/example12.json
 ```
 
 This will use regex pattern matching on the "id" field, considering values equal if they both match the pattern (e.g., "ABC-123-XYZ" and "DEF-456-UVW" both match the pattern "[A-Z]+-\d+-[A-Z]+").
 
+You can specify multiple regex matches for different keys:
+
+```bash
+./jsondiff -regex-match "id:[A-Z]+-\d+-[A-Z]+" -regex-match "timestamp:\d{4}-\d{2}-\d{2}" examples/example11.json examples/example12.json
+```
+
 Output:
 ```
-Validated JSON from example11.json
-Validated JSON from example12.json
+Validated JSON from examples/example11.json
+Validated JSON from examples/example12.json
 The JSON files are identical.
 ```
 
 ### Using Null Value Comparison
 
 ```bash
-./jsondiff -ignore-null example1.json example10.json
+./jsondiff -ignore-null examples/example1.json examples/example10.json
 ```
 
 This will treat null values as equal to any value (e.g., "Harry Potter" equals null).
 
 Output:
 ```
-Validated JSON from example1.json
-Validated JSON from example10.json
+Validated JSON from examples/example1.json
+Validated JSON from examples/example10.json
 The JSON files are identical.
 ```
 
 ### Using Type-Agnostic Comparison
 
 ```bash
-./jsondiff -ignore-numeric-type -ignore-boolean-type example1.json example8.json
+./jsondiff -ignore-numeric-type -ignore-boolean-type examples/example1.json examples/example8.json
 ```
 
 This will treat numeric and boolean values as equal regardless of their type (e.g., `1` equals `"1"` and `true` equals `"true"`).
 
 Output:
 ```
-Validated JSON from example1.json
-Validated JSON from example8.json
+Validated JSON from examples/example1.json
+Validated JSON from examples/example8.json
 The JSON files are identical.
 ```
 
 ### Output Example for Basic Comparison
 
 ```
-Validated JSON from example1.json
-Validated JSON from example2.json
+Validated JSON from examples/example1.json
+Validated JSON from examples/example2.json
 The JSON files are different.
 
 Differences found:

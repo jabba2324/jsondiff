@@ -10,6 +10,18 @@ import (
 	"strings"
 )
 
+// stringSliceFlag is a custom flag type that allows multiple values
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringSliceFlag) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 func main() {
 	// Define flags
 	concisePtr := flag.Bool("concise", false, "Show concise output")
@@ -18,14 +30,15 @@ func main() {
 	keysOnlyPtr := flag.Bool("keys-only", false, "Only compare keys, ignore values")
 	ignoreCasePtr := flag.Bool("ignore-case", false, "Ignore case when comparing keys")
 	ignoreCaseValuesPtr := flag.Bool("ignore-case-values", false, "Ignore case when comparing string values")
-	ignoreNumericTypePtr := flag.Bool("ignore-numeric-type", false, "Ignore numeric types (e.g., 1 == \"1\" == \"1.0\")")
+	ignoreNumericTypePtr := flag.Bool("ignore-numeric-type", false, "Ignore numeric types (e.g., 1 == \"1\" == \"1.0\" == 1.0)")
 	ignoreBooleanTypePtr := flag.Bool("ignore-boolean-type", false, "Ignore boolean types (e.g., true == \"true\")")
 	ignoreNullValuesPtr := flag.Bool("ignore-null", false, "Ignore null values (e.g., \"Harry Potter\" == null)")
-	regexMatchPtr := flag.String("regex-match", "", "Use regex matching on specific key (format: key:pattern)")
-	
+	var regexMatchList stringSliceFlag
+	flag.Var(&regexMatchList, "regex-match", "Use regex matching on specific key (format: key:pattern), can be specified multiple times")
+
 	// Parse flags
 	flag.Parse()
-	
+
 	// Check if we have exactly two arguments after flags
 	args := flag.Args()
 	if len(args) != 2 {
@@ -52,14 +65,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse regex match option
+	// Parse regex match options
 	regexMatches := make(map[string]string)
-	if *regexMatchPtr != "" {
+	for _, regexMatch := range regexMatchList {
 		// Split the regex match option into key and pattern
-		parts := strings.SplitN(*regexMatchPtr, ":", 2)
+		parts := strings.SplitN(regexMatch, ":", 2)
 		if len(parts) == 2 {
 			key := parts[0]
 			pattern := parts[1]
+
+			// Check for duplicate keys
+			if _, exists := regexMatches[key]; exists {
+				fmt.Printf("Warning: Duplicate regex match key '%s'. Only the last pattern will be used.\n", key)
+			}
+
 			regexMatches[key] = pattern
 		} else {
 			fmt.Println("Invalid regex match format. Expected format: key:pattern")
@@ -69,7 +88,7 @@ func main() {
 
 	// Get differences based on options
 	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr, regexMatches)
-	
+
 	// Check if files are identical
 	if len(differences) == 0 {
 		if !*quietPtr {
@@ -79,13 +98,13 @@ func main() {
 	} else {
 		if !*quietPtr {
 			fmt.Println("The JSON files are different.")
-			
+
 			// Show the differences
 			fmt.Println("\nDifferences found:")
 			for _, diff := range differences {
 				fmt.Println(diff)
 			}
-			
+
 			// Compare pretty-printed JSON strings line by line for visual diff
 			if !*noDetailPtr {
 				fmt.Println("\nDetailed line-by-line comparison:")

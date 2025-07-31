@@ -10,14 +10,14 @@ import (
 
 func TestCaseSensitivity(t *testing.T) {
 	// Load test files
-	file1, err := ReadAndValidateJSON("example1.json", true)
+	file1, err := ReadAndValidateJSON("examples/example1.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example1.json: %v", err)
+		t.Fatalf("Failed to read examples/example1.json: %v", err)
 	}
 
-	file6, err := ReadAndValidateJSON("example6.json", true)
+	file6, err := ReadAndValidateJSON("examples/example6.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example6.json: %v", err)
+		t.Fatalf("Failed to read examples/example6.json: %v", err)
 	}
 
 	// Test key case sensitivity
@@ -70,59 +70,59 @@ func TestCaseSensitivity(t *testing.T) {
 
 func TestFindDifferences(t *testing.T) {
 	// Load test files
-	file1, err := ReadAndValidateJSON("example1.json", true)
+	file1, err := ReadAndValidateJSON("examples/example1.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example1.json: %v", err)
+		t.Fatalf("Failed to read examples/example1.json: %v", err)
 	}
 
-	file2, err := ReadAndValidateJSON("example2.json", true)
+	file2, err := ReadAndValidateJSON("examples/example2.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example2.json: %v", err)
+		t.Fatalf("Failed to read examples/example2.json: %v", err)
 	}
 
-	file3, err := ReadAndValidateJSON("example3.json", true)
+	file3, err := ReadAndValidateJSON("examples/example3.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example3.json: %v", err)
+		t.Fatalf("Failed to read examples/example3.json: %v", err)
 	}
 
-	file4, err := ReadAndValidateJSON("example4.json", true)
+	file4, err := ReadAndValidateJSON("examples/example4.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example4.json: %v", err)
+		t.Fatalf("Failed to read examples/example4.json: %v", err)
 	}
 
-	file5, err := ReadAndValidateJSON("example5.json", true)
+	file5, err := ReadAndValidateJSON("examples/example5.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example5.json: %v", err)
+		t.Fatalf("Failed to read examples/example5.json: %v", err)
 	}
 
-	file7, err := ReadAndValidateJSON("example7.json", true)
+	file7, err := ReadAndValidateJSON("examples/example7.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example7.json: %v", err)
+		t.Fatalf("Failed to read examples/example7.json: %v", err)
 	}
 
-	file8, err := ReadAndValidateJSON("example8.json", true)
+	file8, err := ReadAndValidateJSON("examples/example8.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example8.json: %v", err)
+		t.Fatalf("Failed to read examples/example8.json: %v", err)
 	}
 
-	file9, err := ReadAndValidateJSON("example9.json", true)
+	file9, err := ReadAndValidateJSON("examples/example9.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example9.json: %v", err)
+		t.Fatalf("Failed to read examples/example9.json: %v", err)
 	}
 
-	file10, err := ReadAndValidateJSON("example10.json", true)
+	file10, err := ReadAndValidateJSON("examples/example10.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example10.json: %v", err)
+		t.Fatalf("Failed to read examples/example10.json: %v", err)
 	}
 
-	file11, err := ReadAndValidateJSON("example11.json", true)
+	file11, err := ReadAndValidateJSON("examples/example11.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example11.json: %v", err)
+		t.Fatalf("Failed to read examples/example11.json: %v", err)
 	}
 
-	file12, err := ReadAndValidateJSON("example12.json", true)
+	file12, err := ReadAndValidateJSON("examples/example12.json", true)
 	if err != nil {
-		t.Fatalf("Failed to read example12.json: %v", err)
+		t.Fatalf("Failed to read examples/example12.json: %v", err)
 	}
 
 	tests := []struct {

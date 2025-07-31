@@ -1,0 +1,13 @@
+{
+  "integer": 42,
+  "float": 42.0,
+  "string_integer": "42",
+  "string_float": "42.0",
+  "scientific": 4.2e1,
+  "string_scientific": "4.2e1",
+  "zero_integer": 0,
+  "zero_float": 0.0,
+  "string_zero": "0",
+  "negative": -10,
+  "string_negative": "-10"
+}
