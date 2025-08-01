@@ -20,7 +20,7 @@ func TestNumericTypeComparison(t *testing.T) {
 	}
 
 	// Test with ignore-numeric-type flag OFF
-	diffsWithoutFlag := FindDifferences(file15.Data, file16.Data, "", false, false, false, false, false, false, nil)
+	diffsWithoutFlag := FindDifferences(file15.Data, file16.Data, "", false, false, false, false, false, false, nil, nil, 0)
 	
 	// Should find differences for all fields
 	expectedDiffCount := 11 // All fields should be different
@@ -29,7 +29,7 @@ func TestNumericTypeComparison(t *testing.T) {
 	}
 
 	// Test with ignore-numeric-type flag ON
-	diffsWithFlag := FindDifferences(file15.Data, file16.Data, "", false, false, true, false, false, false, nil)
+	diffsWithFlag := FindDifferences(file15.Data, file16.Data, "", false, false, true, false, false, false, nil, nil, 0)
 	
 	// Should find no differences
 	if len(diffsWithFlag) != 0 {

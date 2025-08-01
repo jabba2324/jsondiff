@@ -1,0 +1,16 @@
+{
+  "name": "John Smith",
+  "description": "Software Engineer with 5 years of experience",
+  "location": "New York City",
+  "skills": [
+    "JavaScript",
+    "Python",
+    "React",
+    "Node.js"
+  ],
+  "education": {
+    "university": "Massachusetts Institute of Technology",
+    "degree": "Computer Science",
+    "year": 2015
+  }
+}

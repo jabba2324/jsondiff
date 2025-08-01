@@ -25,7 +25,6 @@ func (s *stringSliceFlag) Set(value string) error {
 func main() {
 	// Define flags
 	concisePtr := flag.Bool("concise", false, "Show concise output")
-	noDetailPtr := flag.Bool("no-detail", false, "Skip detailed line-by-line comparison")
 	quietPtr := flag.Bool("quiet", false, "Only show if files differ, no details")
 	keysOnlyPtr := flag.Bool("keys-only", false, "Only compare keys, ignore values")
 	ignoreCasePtr := flag.Bool("ignore-case", false, "Ignore case when comparing keys")
@@ -35,6 +34,9 @@ func main() {
 	ignoreNullValuesPtr := flag.Bool("ignore-null", false, "Ignore null values (e.g., \"Harry Potter\" == null)")
 	var regexMatchList stringSliceFlag
 	flag.Var(&regexMatchList, "regex-match", "Use regex matching on specific key (format: key:pattern), can be specified multiple times")
+	var levenshteinKeyList stringSliceFlag
+	flag.Var(&levenshteinKeyList, "levenshtein-key", "Apply Levenshtein distance matching on specific key, can be specified multiple times")
+	levenshteinThresholdPtr := flag.Int("levenshtein-threshold", 3, "Maximum Levenshtein distance to consider strings as equal (default: 3)")
 
 	// Parse flags
 	flag.Parse()
@@ -86,8 +88,14 @@ func main() {
 		}
 	}
 
+	// Parse Levenshtein keys
+	levenshteinKeys := make(map[string]bool)
+	for _, key := range levenshteinKeyList {
+		levenshteinKeys[key] = true
+	}
+
 	// Get differences based on options
-	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr, regexMatches)
+	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr, regexMatches, levenshteinKeys, *levenshteinThresholdPtr)
 
 	// Check if files are identical
 	if len(differences) == 0 {
@@ -102,13 +110,18 @@ func main() {
 			// Show the differences
 			fmt.Println("\nDifferences found:")
 			for _, diff := range differences {
-				fmt.Println(diff)
-			}
-
-			// Compare pretty-printed JSON strings line by line for visual diff
-			if !*noDetailPtr {
-				fmt.Println("\nDetailed line-by-line comparison:")
-				CompareLines(jsonFile1.PrettyJSON, jsonFile2.PrettyJSON)
+				switch diff.Type {
+				case ValueMismatch:
+					fmt.Printf("%s: value mismatch\n- %v\n+ %v\n", diff.Path, diff.Value1, diff.Value2)
+				case KeyOnlyInFirst:
+					fmt.Printf("%s: key exists only in first file\n", diff.Path)
+				case KeyOnlyInSecond:
+					fmt.Printf("%s: key exists only in second file\n", diff.Path)
+				case ArrayLength:
+					fmt.Printf("%s: array length mismatch\n- %v\n+ %v\n", diff.Path, diff.Value1, diff.Value2)
+				case TypeMismatch:
+					fmt.Printf("%s: type mismatch\n- %v\n+ %v\n", diff.Path, diff.Value1, diff.Value2)
+				}
 			}
 		}
 		os.Exit(1) // Exit with non-zero status if files differ

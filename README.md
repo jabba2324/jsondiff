@@ -10,7 +10,7 @@ A simple command-line tool to compare two JSON files and show their differences.
   - Missing/extra keys
   - Value mismatches
   - Array length differences
-  - Line-by-line comparison
+  - Type mismatches
 - Flexible comparison options:
   - Case-insensitive key comparison
   - Case-insensitive string value comparison
@@ -18,6 +18,7 @@ A simple command-line tool to compare two JSON files and show their differences.
   - Type-agnostic boolean comparison (true == "true")
   - Null value comparison ("Harry Potter" == null)
   - Regex pattern matching for specific keys
+  - Levenshtein distance fuzzy matching for specific keys
 - Comprehensive unit tests
 
 ## Installation
@@ -40,7 +41,6 @@ go build -o jsondiff
 ### Options
 
 - `-concise`: Show concise output (suppresses validation messages)
-- `-no-detail`: Skip detailed line-by-line comparison
 - `-quiet`: Only show if files differ via exit code (0 for identical, 1 for different)
 - `-keys-only`: Only compare keys/structure, ignore values
 - `-ignore-case`: Ignore case when comparing keys
@@ -49,6 +49,8 @@ go build -o jsondiff
 - `-ignore-boolean-type`: Ignore boolean types (e.g., true == "true")
 - `-ignore-null`: Ignore null values (e.g., "Harry Potter" == null)
 - `-regex-match`: Use regex matching on specific key (format: key:pattern), can be specified multiple times
+- `-levenshtein-key`: Apply Levenshtein distance matching on specific key, can be specified multiple times
+- `-levenshtein-threshold`: Maximum Levenshtein distance to consider strings as equal (default: 3)
 
 ## Examples
 
@@ -71,6 +73,29 @@ Output:
 Validated JSON from examples/example1.json
 Validated JSON from examples/example7.json
 The JSON files are identical.
+```
+
+### Using Levenshtein Distance Matching
+
+```bash
+./jsondiff -levenshtein-key name -levenshtein-key "education.university" -levenshtein-threshold 2 examples/example17.json examples/example18.json
+```
+
+This will use Levenshtein distance matching on the "name" and "education.university" fields, considering values equal if their Levenshtein distance is less than or equal to 2. This is useful for comparing strings that might have small typos or variations (e.g., "John Smith" vs "John Smyth" or "Massachusetts Institute of Technology" vs "Massachusets Institute of Technology").
+
+Output:
+```
+Validated JSON from examples/example17.json
+Validated JSON from examples/example18.json
+The JSON files are different.
+
+Differences found:
+description: value mismatch
+- Software Engineer with 5 years of experience
++ Software Engineer with 6 years of experience
+location: value mismatch
+- New York City
++ New York
 ```
 
 ### Using Regex Pattern Matching
@@ -132,24 +157,18 @@ Validated JSON from examples/example2.json
 The JSON files are different.
 
 Differences found:
-name: value mismatch - John vs Jane
-age: value mismatch - 30 vs 31
-address.city: value mismatch - New York vs Boston
-hobbies[1]: value mismatch - cycling vs swimming
-
-Detailed line-by-line comparison:
-Line 3:
-  - "name": "John",
-  + "name": "Jane",
-Line 4:
-  - "age": 30,
-  + "age": 31,
-Line 7:
-  - "city": "New York",
-  + "city": "Boston",
-Line 12:
-  - "cycling",
-  + "swimming",
+name: value mismatch
+- John
++ Jane
+age: value mismatch
+- 30
++ 31
+address.city: value mismatch
+- New York
++ Boston
+hobbies[1]: value mismatch
+- cycling
++ swimming
 ```
 
 ## Testing
@@ -163,7 +182,9 @@ go test -v
 The tests cover all major functionality including:
 - Finding differences between JSON files
 - Comparing only keys/structure
-- Line-by-line comparison
+- Type-agnostic comparisons
+- Levenshtein distance matching
+- Regex pattern matching
 
 ## License
 

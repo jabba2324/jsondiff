@@ -4,7 +4,8 @@
 package main
 
 import (
-	"reflect"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test key case sensitivity
-	diffs := FindDifferences(file1.Data, file6.Data, "", false, false, false, false, false, false, nil)
+	diffs := FindDifferences(file1.Data, file6.Data, "", false, false, false, false, false, false, nil, nil, 0)
 	if len(diffs) == 0 {
 		t.Error("Expected differences due to case-sensitive keys, but found none")
 	}
@@ -39,7 +40,8 @@ func TestCaseSensitivity(t *testing.T) {
 	for _, expected := range expectedKeyDiffs {
 		found := false
 		for _, diff := range diffs {
-			if contains(diff, expected) {
+			diffStr := formatDiff(diff)
+			if strings.Contains(diffStr, expected) {
 				found = true
 				break
 			}
@@ -50,19 +52,20 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	// Test case-insensitive comparison
-	ignoreCaseDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, false, nil)
+	ignoreCaseDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, false, nil, nil, 0)
 	
 	// Should only find differences in values, not in keys
 	for _, diff := range ignoreCaseDiffs {
+		diffStr := formatDiff(diff)
 		for _, keyDiff := range expectedKeyDiffs {
-			if contains(diff, keyDiff) {
-				t.Errorf("Found unexpected key difference in case-insensitive mode: %s", diff)
+			if strings.Contains(diffStr, keyDiff) {
+				t.Errorf("Found unexpected key difference in case-insensitive mode: %s", diffStr)
 			}
 		}
 	}
 
 	// Test case-insensitive key-only comparison
-	keyDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, true, nil)
+	keyDiffs := FindDifferences(file1.Data, file6.Data, "", true, false, false, false, false, true, nil, nil, 0)
 	if len(keyDiffs) > 0 {
 		t.Errorf("Expected structures to be equal in case-insensitive mode, but found differences: %v", keyDiffs)
 	}
@@ -126,45 +129,51 @@ func TestFindDifferences(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		obj1              interface{}
-		obj2              interface{}
-		ignoreCase        bool
-		ignoreCaseValues  bool
-		ignoreNumericType bool
-		ignoreBooleanType bool
-		ignoreNullValues  bool
-		regexMatches      map[string]string
-		keysOnly          bool
-		expectDiff        bool
-		expectedDiffs     int
-		expectedValues    []string
+		name                 string
+		obj1                 interface{}
+		obj2                 interface{}
+		ignoreCase           bool
+		ignoreCaseValues     bool
+		ignoreNumericType    bool
+		ignoreBooleanType    bool
+		ignoreNullValues     bool
+		regexMatches         map[string]string
+		levenshteinKeys      map[string]bool
+		levenshteinThreshold int
+		keysOnly             bool
+		expectDiff           bool
+		expectedDiffs        int
+		expectedValues       []string
 	}{
 		// Full comparison tests
 		{
-			name:              "Identical files",
-			obj1:              file1.Data,
-			obj2:              file3.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Identical files",
+			obj1:                 file1.Data,
+			obj2:                 file3.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        false,
 		},
 		{
-			name:              "Different values",
-			obj1:              file1.Data,
-			obj2:              file2.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Different values",
+			obj1:                 file1.Data,
+			obj2:                 file2.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        true,
 			expectedDiffs:     4,
 			expectedValues: []string{
@@ -175,16 +184,18 @@ func TestFindDifferences(t *testing.T) {
 			},
 		},
 		{
-			name:              "Different structure",
-			obj1:              file1.Data,
-			obj2:              file5.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Different structure",
+			obj1:                 file1.Data,
+			obj2:                 file5.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        true,
 			expectedDiffs:     11,
 			expectedValues: []string{
@@ -203,85 +214,97 @@ func TestFindDifferences(t *testing.T) {
 		},
 		// Case-insensitive value comparison test
 		{
-			name:              "Case-insensitive value comparison",
-			obj1:              file1.Data,
-			obj2:              file7.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  true,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Case-insensitive value comparison",
+			obj1:                 file1.Data,
+			obj2:                 file7.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     true,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        false,
 		},
 		// Numeric type comparison test
 		{
-			name:              "Numeric type comparison",
-			obj1:              file1.Data,
-			obj2:              file8.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: true,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Numeric type comparison",
+			obj1:                 file1.Data,
+			obj2:                 file8.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    true,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        false,
 		},
 		// Boolean type comparison test
 		{
-			name:              "Boolean type comparison",
-			obj1:              file1.Data,
-			obj2:              file9.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: true,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Boolean type comparison",
+			obj1:                 file1.Data,
+			obj2:                 file9.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    true,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        false,
 		},
 		// Null value comparison test
 		{
-			name:              "Null value comparison",
-			obj1:              file1.Data,
-			obj2:              file10.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  true,
-			regexMatches:      nil,
-			keysOnly:          false,
+			name:                 "Null value comparison",
+			obj1:                 file1.Data,
+			obj2:                 file10.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     true,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        false,
 		},
 		// Keys-only comparison tests
 		{
-			name:              "Same structure different values",
-			obj1:              file1.Data,
-			obj2:              file4.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          true,
+			name:                 "Same structure different values",
+			obj1:                 file1.Data,
+			obj2:                 file4.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             true,
 			expectDiff:        false,
 		},
 		{
-			name:              "Different structure keys-only",
-			obj1:              file1.Data,
-			obj2:              file5.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      nil,
-			keysOnly:          true,
+			name:                 "Different structure keys-only",
+			obj1:                 file1.Data,
+			obj2:                 file5.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         nil,
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             true,
 			expectDiff:        true,
 			expectedDiffs:     5,
 			expectedValues: []string{
@@ -294,23 +317,25 @@ func TestFindDifferences(t *testing.T) {
 		},
 		// Regex match test
 		{
-			name:              "Regex match comparison",
-			obj1:              file11.Data,
-			obj2:              file12.Data,
-			ignoreCase:        false,
-			ignoreCaseValues:  false,
-			ignoreNumericType: false,
-			ignoreBooleanType: false,
-			ignoreNullValues:  false,
-			regexMatches:      map[string]string{"id": "[A-Z]+-\\d+-[A-Z]+"},
-			keysOnly:          false,
+			name:                 "Regex match comparison",
+			obj1:                 file11.Data,
+			obj2:                 file12.Data,
+			ignoreCase:           false,
+			ignoreCaseValues:     false,
+			ignoreNumericType:    false,
+			ignoreBooleanType:    false,
+			ignoreNullValues:     false,
+			regexMatches:         map[string]string{"id": "[A-Z]+-\\d+-[A-Z]+"},
+			levenshteinKeys:      nil,
+			levenshteinThreshold: 0,
+			keysOnly:             false,
 			expectDiff:        false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			diffs := FindDifferences(tt.obj1, tt.obj2, "", tt.ignoreCase, tt.ignoreCaseValues, tt.ignoreNumericType, tt.ignoreBooleanType, tt.ignoreNullValues, tt.keysOnly, tt.regexMatches)
+			diffs := FindDifferences(tt.obj1, tt.obj2, "", tt.ignoreCase, tt.ignoreCaseValues, tt.ignoreNumericType, tt.ignoreBooleanType, tt.ignoreNullValues, tt.keysOnly, tt.regexMatches, tt.levenshteinKeys, tt.levenshteinThreshold)
 			
 			if (len(diffs) > 0) != tt.expectDiff {
 				t.Errorf("Expected diff: %v, got: %v, differences: %v", tt.expectDiff, len(diffs) > 0, diffs)
@@ -324,7 +349,8 @@ func TestFindDifferences(t *testing.T) {
 				for _, expected := range tt.expectedValues {
 					found := false
 					for _, diff := range diffs {
-						if contains(diff, expected) {
+						diffStr := formatDiff(diff)
+						if strings.Contains(diffStr, expected) {
 							found = true
 							break
 						}
@@ -338,7 +364,20 @@ func TestFindDifferences(t *testing.T) {
 	}
 }
 
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	return reflect.DeepEqual(s, substr) || len(s) >= len(substr) && s[:len(substr)] == substr
+// Helper function to format a Diff object as a string
+func formatDiff(diff Diff) string {
+	switch diff.Type {
+	case ValueMismatch:
+		return fmt.Sprintf("%s: value mismatch - %v vs %v", diff.Path, diff.Value1, diff.Value2)
+	case KeyOnlyInFirst:
+		return fmt.Sprintf("%s: key exists only in first file", diff.Path)
+	case KeyOnlyInSecond:
+		return fmt.Sprintf("%s: key exists only in second file", diff.Path)
+	case ArrayLength:
+		return fmt.Sprintf("%s: array length mismatch - %v vs %v", diff.Path, diff.Value1, diff.Value2)
+	case TypeMismatch:
+		return fmt.Sprintf("%s: type mismatch - %v vs %v", diff.Path, diff.Value1, diff.Value2)
+	default:
+		return fmt.Sprintf("%s: unknown difference type", diff.Path)
+	}
 }

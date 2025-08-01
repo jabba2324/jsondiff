@@ -4,214 +4,147 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"reflect"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
-// JSONFile represents a parsed JSON file
-type JSONFile struct {
-	Data       interface{}
-	PrettyJSON string
+// DiffType represents the type of difference between JSON objects
+type DiffType int
+
+// Enum values for DiffType
+const (
+	ValueMismatch DiffType = iota
+	KeyOnlyInFirst
+	KeyOnlyInSecond
+	ArrayLength
+	TypeMismatch
+)
+
+// String returns the string representation of a DiffType
+func (dt DiffType) String() string {
+	switch dt {
+	case ValueMismatch:
+		return "value_mismatch"
+	case KeyOnlyInFirst:
+		return "key_only_in_first"
+	case KeyOnlyInSecond:
+		return "key_only_in_second"
+	case ArrayLength:
+		return "array_length"
+	case TypeMismatch:
+		return "type_mismatch"
+	default:
+		return "unknown"
+	}
 }
 
-// CompareOptions contains options for JSON comparison
-type CompareOptions struct {
-	IgnoreCase        bool              // If true, key comparisons will be case-insensitive
-	IgnoreCaseValues  bool              // If true, string value comparisons will be case-insensitive
-	IgnoreNumericType bool              // If true, numeric types are compared by value, not type (e.g., 1 == "1" == "1.0")
-	IgnoreBooleanType bool              // If true, boolean types are compared by value, not type (e.g., true == "true")
-	IgnoreNullValues  bool              // If true, null values are considered equal to any value
-	KeysOnly          bool              // If true, only compare keys/structure, not values
-	RegexMatches      map[string]string // Map of key paths to regex patterns for value matching
-}
-
-// ReadAndValidateJSON reads a JSON file, validates it, and returns the parsed object and pretty-printed string
-func ReadAndValidateJSON(filePath string, concise bool) (*JSONFile, error) {
-	// Read file
-	data, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %v", err)
-	}
-
-	// Parse JSON
-	var jsonObj interface{}
-	err = json.Unmarshal(data, &jsonObj)
-	if err != nil {
-		return nil, fmt.Errorf("invalid JSON: %v", err)
-	}
-
-	// Pretty print (for validation)
-	prettyJSON, err := json.MarshalIndent(jsonObj, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to pretty print: %v", err)
-	}
-
-	if !concise {
-		fmt.Printf("Validated JSON from %s\n", filePath)
-	}
-	
-	return &JSONFile{
-		Data:       jsonObj,
-		PrettyJSON: string(prettyJSON),
-	}, nil
+// Diff represents a difference between two JSON objects
+type Diff struct {
+	Path   string      // Path to the key where the difference was found
+	Type   DiffType    // Type of difference
+	Value1 interface{} // Value from the first object
+	Value2 interface{} // Value from the second object
 }
 
 // FindDifferences recursively compares two JSON objects and returns a list of differences
 // Options control whether to ignore case and whether to compare only keys
-func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, ignoreNumericType, ignoreBooleanType, ignoreNullValues, keysOnly bool, regexMatches map[string]string) []string {
+func FindDifferences(obj1, obj2 interface{}, path string, ignoreCase, ignoreCaseValues, ignoreNumericType, ignoreBooleanType, ignoreNullValues, keysOnly bool, regexMatches map[string]string, levenshteinKeys map[string]bool, levenshteinThreshold int) []Diff {
 	return findDifferencesWithOptions(obj1, obj2, path, CompareOptions{
-		IgnoreCase:        ignoreCase,
-		IgnoreCaseValues:  ignoreCaseValues,
-		IgnoreNumericType: ignoreNumericType,
-		IgnoreBooleanType: ignoreBooleanType,
-		IgnoreNullValues:  ignoreNullValues,
-		KeysOnly:          keysOnly,
-		RegexMatches:      regexMatches,
+		IgnoreCase:           ignoreCase,
+		IgnoreCaseValues:     ignoreCaseValues,
+		IgnoreNumericType:    ignoreNumericType,
+		IgnoreBooleanType:    ignoreBooleanType,
+		IgnoreNullValues:     ignoreNullValues,
+		KeysOnly:             keysOnly,
+		RegexMatches:         regexMatches,
+		LevenshteinKeys:      levenshteinKeys,
+		LevenshteinThreshold: levenshteinThreshold,
 	})
 }
 
-// isComplex checks if a value is a complex type (map or array)
-func isComplex(val interface{}) bool {
-	switch val.(type) {
-	case map[string]interface{}, []interface{}:
-		return true
-	default:
-		return false
-	}
-}
-
-// compareBooleanValues compares two values as booleans, ignoring their original types
-// Returns true if both values can be converted to booleans and are equal
-func compareBooleanValues(val1, val2 interface{}) (bool, bool) {
-	// Extract boolean values
-	bool1, isBool1 := val1.(bool)
-	boolStr1, isBoolStr1 := val1.(string)
-	bool2, isBool2 := val2.(bool)
-	boolStr2, isBoolStr2 := val2.(string)
-	
-	// Check if we're comparing boolean values
-	if !isBool1 && !isBoolStr1 && !isBool2 && !isBoolStr2 {
-		// Not comparing booleans
-		return false, false
-	}
-	
-	// Convert to boolean values
-	var b1, b2 bool
-	var ok1, ok2 bool
-	
-	if isBool1 {
-		b1 = bool1
-		ok1 = true
-	} else if isBoolStr1 {
-		lowerStr := strings.ToLower(boolStr1)
-		if lowerStr == "true" {
-			b1 = true
-			ok1 = true
-		} else if lowerStr == "false" {
-			b1 = false
-			ok1 = true
+// compareValues compares two values with all the special handling options
+// Returns true if the values are considered equal according to the options
+func compareValues(val1, val2 interface{}, path string, options CompareOptions) bool {
+	// Special handling for strings when IgnoreCaseValues is true
+	if options.IgnoreCaseValues && !options.KeysOnly {
+		str1, isStr1 := val1.(string)
+		str2, isStr2 := val2.(string)
+		if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
+			// Strings are equal when ignoring case
+			return true
 		}
 	}
-	
-	if isBool2 {
-		b2 = bool2
-		ok2 = true
-	} else if isBoolStr2 {
-		lowerStr := strings.ToLower(boolStr2)
-		if lowerStr == "true" {
-			b2 = true
-			ok2 = true
-		} else if lowerStr == "false" {
-			b2 = false
-			ok2 = true
+
+	// Special handling for null values
+	if options.IgnoreNullValues && !options.KeysOnly {
+		if val1 == nil || val2 == nil {
+			// If either value is null, consider them equal
+			return true
 		}
 	}
-	
-	// If both values could be converted to booleans, compare them
-	if ok1 && ok2 {
-		return b1 == b2, true
-	}
-	
-	// Couldn't convert both values to booleans
-	return false, false
-}
 
-// convertToFloat64 attempts to convert a value to float64
-// Returns the converted value and a boolean indicating success
-func convertToFloat64(val interface{}) (float64, bool) {
-	switch v := val.(type) {
-	case float64:
-		return v, true
-	case float32:
-		return float64(v), true
-	case int:
-		return float64(v), true
-	case int64:
-		return float64(v), true
-	case int32:
-		return float64(v), true
-	case string:
-		// Try to parse string as number
-		f, err := strconv.ParseFloat(v, 64)
-		if err == nil {
-			return f, true
+	// Special handling for regex matching
+	if !options.KeysOnly && len(options.RegexMatches) > 0 {
+		// Check if this key path has a regex pattern
+		if pattern, ok := options.RegexMatches[path]; ok {
+			// Check if both values match the pattern
+			matches, err := matchesRegex(val1, val2, pattern)
+			if err == nil && matches {
+				// Both values match the pattern, consider them equal
+				return true
+			}
 		}
 	}
-	return 0, false
-}
 
-// compareNumericValues compares two values as numbers, ignoring their original types
-// Returns true if both values can be converted to numbers and are equal
-func compareNumericValues(val1, val2 interface{}) bool {
-	// Try to convert both values to float64
-	num1, ok1 := convertToFloat64(val1)
-	num2, ok2 := convertToFloat64(val2)
+	// Special handling for Levenshtein distance
+	if !options.KeysOnly && len(options.LevenshteinKeys) > 0 && options.LevenshteinThreshold > 0 {
+		// Check if this key path should use Levenshtein distance
+		if _, ok := options.LevenshteinKeys[path]; ok {
+			// Check if strings are similar using Levenshtein distance
+			if compareLevenshtein(val1, val2, options.LevenshteinThreshold) {
+				// Strings are similar enough, consider them equal
+				return true
+			}
+		}
+	}
 
-	// Compare the numeric values if both conversions succeeded
-	if ok1 && ok2 {
-		return num1 == num2
+	// Special handling for boolean types
+	if options.IgnoreBooleanType && !options.KeysOnly {
+		if equal, ok := compareBooleanValues(val1, val2); ok && equal {
+			// Values are equal when compared as booleans
+			return true
+		}
 	}
-	
-	// Values couldn't be compared as numbers
-	return false
-}
 
-// matchesRegex checks if both values match the given regex pattern
-// Returns true if both values are strings and match the pattern
-func matchesRegex(val1, val2 interface{}, pattern string) (bool, error) {
-	// Check if both values are strings
-	str1, isStr1 := val1.(string)
-	str2, isStr2 := val2.(string)
-	
-	if !isStr1 || !isStr2 {
-		return false, nil // Not comparing strings
+	// Special handling for numeric types
+	if options.IgnoreNumericType && !options.KeysOnly {
+		if compareNumericValues(val1, val2) {
+			// Values are equal when compared as numbers
+			return true
+		}
 	}
-	
-	// Compile the regex pattern
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return false, err
-	}
-	
-	// Check if both strings match the pattern
-	return re.MatchString(str1) && re.MatchString(str2), nil
+
+	// Standard comparison
+	return reflect.DeepEqual(val1, val2)
 }
 
 // findDifferencesWithOptions is the internal implementation that handles all comparison options
-func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options CompareOptions) []string {
-	differences := []string{}
+func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options CompareOptions) []Diff {
+	differences := []Diff{}
 
 	// If types are different, that's a difference
 	type1 := reflect.TypeOf(obj1)
 	type2 := reflect.TypeOf(obj2)
 	if type1 != type2 {
-		return append(differences, fmt.Sprintf("%s: type mismatch - %v vs %v", path, type1, type2))
+		differences = append(differences, Diff{
+			Path:   path,
+			Type:   TypeMismatch,
+			Value1: type1,
+			Value2: type2,
+		})
+		return differences
 	}
 
 	// Handle different types
@@ -223,17 +156,17 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 
 		// Get all keys from both maps
 		allKeys := make(map[string]bool)
-		
+
 		// If case-insensitive, create case-insensitive maps for lookup
 		var lookupMap1, lookupMap2 map[string]interface{}
 		var keyMap1, keyMap2 map[string]string
-		
+
 		if options.IgnoreCase {
 			lookupMap1 = make(map[string]interface{})
 			lookupMap2 = make(map[string]interface{})
 			keyMap1 = make(map[string]string)
 			keyMap2 = make(map[string]string)
-			
+
 			// Create case-insensitive lookup maps
 			for key, val := range map1 {
 				lKey := strings.ToLower(key)
@@ -241,7 +174,7 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 				keyMap1[lKey] = key
 				allKeys[lKey] = true
 			}
-			
+
 			for key, val := range map2 {
 				lKey := strings.ToLower(key)
 				lookupMap2[lKey] = val
@@ -270,12 +203,12 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 			var newPath, originalKey1, originalKey2 string
 			var val1, val2 interface{}
 			var ok1, ok2 bool
-			
+
 			if options.IgnoreCase {
 				// For case-insensitive, key is already lowercase
 				originalKey1, ok1 = keyMap1[key]
 				originalKey2, ok2 = keyMap2[key]
-				
+
 				if ok1 {
 					val1 = lookupMap1[key]
 					newPath = originalKey1
@@ -284,7 +217,7 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 				} else {
 					newPath = key // Shouldn't happen, but just in case
 				}
-				
+
 				if ok2 {
 					val2 = lookupMap2[key]
 				}
@@ -294,75 +227,48 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 				val1, ok1 = map1[key]
 				val2, ok2 = map2[key]
 			}
-			
+
 			if path != "" {
 				newPath = path + "." + newPath
 			}
 
 			if !ok1 {
-				differences = append(differences, fmt.Sprintf("%s: key exists only in second file", newPath))
+				differences = append(differences, Diff{
+					Path:   newPath,
+					Type:   KeyOnlyInSecond,
+					Value1: nil,
+					Value2: val2,
+				})
 			} else if !ok2 {
-				differences = append(differences, fmt.Sprintf("%s: key exists only in first file", newPath))
+				differences = append(differences, Diff{
+					Path:   newPath,
+					Type:   KeyOnlyInFirst,
+					Value1: val1,
+					Value2: nil,
+				})
 			} else {
-				// Special handling for strings when IgnoreCaseValues is true
-				if options.IgnoreCaseValues && !options.KeysOnly {
-					str1, isStr1 := val1.(string)
-					str2, isStr2 := val2.(string)
-					if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
-						// Strings are equal when ignoring case
-						continue
+				// Compare values using all the special handling options
+				if options.KeysOnly {
+					// In keys-only mode, only check structure of complex objects
+					if isComplex(val1) {
+						differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
 					}
-				}
-				
-				// Special handling for null values
-				if options.IgnoreNullValues && !options.KeysOnly {
-					if val1 == nil || val2 == nil {
-						// If either value is null, consider them equal
-						continue
-					}
-				}
-				
-				// Special handling for regex matching
-				if !options.KeysOnly && len(options.RegexMatches) > 0 {
-					// Check if this key path has a regex pattern
-					if pattern, ok := options.RegexMatches[newPath]; ok {
-						// Check if both values match the pattern
-						matches, err := matchesRegex(val1, val2, pattern)
-						if err == nil && matches {
-							// Both values match the pattern, consider them equal
-							continue
+				} else {
+					// Check if values are equal according to the options
+					if !compareValues(val1, val2, newPath, options) {
+						if isComplex(val1) {
+							// Recursively compare nested structures
+							differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
+						} else {
+							// For primitive types, just compare values
+							differences = append(differences, Diff{
+								Path:   newPath,
+								Type:   ValueMismatch,
+								Value1: val1,
+								Value2: val2,
+							})
 						}
 					}
-				}
-				
-				// Special handling for boolean types
-				if options.IgnoreBooleanType && !options.KeysOnly {
-					if equal, ok := compareBooleanValues(val1, val2); ok && equal {
-						// Values are equal when compared as booleans
-						continue
-					}
-				}
-				
-				// Special handling for numeric types
-				if options.IgnoreNumericType && !options.KeysOnly {
-					if compareNumericValues(val1, val2) {
-						// Values are equal when compared as numbers
-						continue
-					}
-				}
-				
-				if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
-					// Only compare values if not in keys-only mode
-					if isComplex(val1) {
-						// Recursively compare nested structures
-						differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
-					} else {
-						// For primitive types, just compare values
-						differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", newPath, val1, val2))
-					}
-				} else if options.KeysOnly && isComplex(val1) {
-					// In keys-only mode, still check structure of nested objects
-					differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
 				}
 			}
 		}
@@ -374,7 +280,12 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 
 		// Check array lengths
 		if len(arr1) != len(arr2) {
-			differences = append(differences, fmt.Sprintf("%s: array length mismatch - %d vs %d", path, len(arr1), len(arr2)))
+			differences = append(differences, Diff{
+				Path:   path,
+				Type:   ArrayLength,
+				Value1: len(arr1),
+				Value2: len(arr2),
+			})
 		}
 
 		// Compare array elements
@@ -387,111 +298,43 @@ func findDifferencesWithOptions(obj1, obj2 interface{}, path string, options Com
 			newPath := fmt.Sprintf("%s[%d]", path, i)
 			val1 := arr1[i]
 			val2 := arr2[i]
-			
-			// Special handling for strings when IgnoreCaseValues is true
-			if options.IgnoreCaseValues && !options.KeysOnly {
-				str1, isStr1 := val1.(string)
-				str2, isStr2 := val2.(string)
-				if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
-					// Strings are equal when ignoring case, continue to next element
-					continue
-				}
-			}
-			
-			// Special handling for null values
-			if options.IgnoreNullValues && !options.KeysOnly {
-				if val1 == nil || val2 == nil {
-					// If either value is null, consider them equal
-					continue
-				}
-			}
-			
-			// Special handling for regex matching
-			if !options.KeysOnly && len(options.RegexMatches) > 0 {
-				// Check if this key path has a regex pattern
-				if pattern, ok := options.RegexMatches[newPath]; ok {
-					// Check if both values match the pattern
-					matches, err := matchesRegex(val1, val2, pattern)
-					if err == nil && matches {
-						// Both values match the pattern, consider them equal
-						continue
-					}
-				}
-			}
-			
-			// Special handling for boolean types
-			if options.IgnoreBooleanType && !options.KeysOnly {
-				if equal, ok := compareBooleanValues(val1, val2); ok && equal {
-					// Values are equal when compared as booleans
-					continue
-				}
-			}
-			
-			// Special handling for numeric types
-			if options.IgnoreNumericType && !options.KeysOnly {
-				if compareNumericValues(val1, val2) {
-					// Values are equal when compared as numbers
-					continue
-				}
-			}
-			
-			if !options.KeysOnly && !reflect.DeepEqual(val1, val2) {
-				// Only compare values if not in keys-only mode
+
+			// Compare values using all the special handling options
+			if options.KeysOnly {
+				// In keys-only mode, only check structure of complex objects
 				if isComplex(val1) {
 					differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
-				} else {
-					differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", newPath, val1, val2))
 				}
-			} else if options.KeysOnly && isComplex(val1) {
-				// In keys-only mode, still check structure of nested objects
-				differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
+			} else {
+				// Check if values are equal according to the options
+				if !compareValues(val1, val2, newPath, options) {
+					if isComplex(val1) {
+						// Recursively compare nested structures
+						differences = append(differences, findDifferencesWithOptions(val1, val2, newPath, options)...)
+					} else {
+						// For primitive types, just compare values
+						differences = append(differences, Diff{
+							Path:   newPath,
+							Type:   ValueMismatch,
+							Value1: val1,
+							Value2: val2,
+						})
+					}
+				}
 			}
 		}
 
 	default:
 		// For primitive types, just compare values if not in keys-only mode
-		if !options.KeysOnly {
-			// Special handling for null values
-			if options.IgnoreNullValues {
-				if obj1 == nil || obj2 == nil {
-					// If either value is null, consider them equal
-					return differences
-				}
-			}
-			
-			// Special handling for strings when IgnoreCaseValues is true
-			if options.IgnoreCaseValues {
-				str1, isStr1 := obj1.(string)
-				str2, isStr2 := obj2.(string)
-				if isStr1 && isStr2 && strings.EqualFold(str1, str2) {
-					// Strings are equal when ignoring case
-					return differences
-				}
-			}
-			
-			// Special handling for boolean types
-			if options.IgnoreBooleanType {
-				if equal, ok := compareBooleanValues(obj1, obj2); ok && equal {
-					// Values are equal when compared as booleans
-					return differences
-				}
-			}
-			
-			// Special handling for numeric types
-			if options.IgnoreNumericType {
-				if compareNumericValues(obj1, obj2) {
-					// Values are equal when compared as numbers
-					return differences
-				}
-			}
-			
-			// Standard comparison for non-strings or when not ignoring case
-			if !reflect.DeepEqual(obj1, obj2) {
-				differences = append(differences, fmt.Sprintf("%s: value mismatch - %v vs %v", path, obj1, obj2))
-			}
+		if !options.KeysOnly && !compareValues(obj1, obj2, path, options) {
+			differences = append(differences, Diff{
+				Path:   path,
+				Type:   ValueMismatch,
+				Value1: obj1,
+				Value2: obj2,
+			})
 		}
 	}
 
 	return differences
 }
-

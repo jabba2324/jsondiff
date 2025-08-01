@@ -1,0 +1,16 @@
+{
+  "name": "John Smyth",
+  "description": "Software Engineer with 6 years of experience",
+  "location": "New York",
+  "skills": [
+    "JavaScript",
+    "Python",
+    "React",
+    "Node.js"
+  ],
+  "education": {
+    "university": "Massachusets Institute of Technology",
+    "degree": "Computer Science",
+    "year": 2015
+  }
+}
