@@ -42,6 +42,7 @@ go build -o jsondiff
 
 - `-concise`: Show concise output (suppresses validation messages)
 - `-quiet`: Only show if files differ via exit code (0 for identical, 1 for different)
+- `-output-json <file>`: Write differences to a JSON file
 - `-keys-only`: Only compare keys/structure, ignore values
 - `-ignore-case`: Ignore case when comparing keys
 - `-ignore-case-values`: Ignore case when comparing string values
@@ -148,6 +149,39 @@ Validated JSON from examples/example1.json
 Validated JSON from examples/example8.json
 The JSON files are identical.
 ```
+
+### Writing Differences to a JSON File
+
+```bash
+./jsondiff -output-json differences.json examples/example1.json examples/example2.json
+```
+
+This will write the differences to a JSON file, which can be useful for programmatic processing or integration with other tools.
+
+Output:
+```
+Validated JSON from examples/example1.json
+Validated JSON from examples/example2.json
+The JSON files are different.
+
+Differences found:
+name: value mismatch
+- John
++ Jane
+age: value mismatch
+- 30
++ 31
+address.city: value mismatch
+- New York
++ Boston
+hobbies[1]: value mismatch
+- cycling
++ swimming
+
+Differences written to differences.json
+```
+
+The JSON file will contain structured information about the differences:
 
 ### Output Example for Basic Comparison
 

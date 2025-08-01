@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -21,6 +22,11 @@ const (
 	ArrayLength
 	TypeMismatch
 )
+
+// MarshalJSON implements the json.Marshaler interface for DiffType
+func (dt DiffType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(dt.String())
+}
 
 // String returns the string representation of a DiffType
 func (dt DiffType) String() string {
@@ -42,10 +48,10 @@ func (dt DiffType) String() string {
 
 // Diff represents a difference between two JSON objects
 type Diff struct {
-	Path   string      // Path to the key where the difference was found
-	Type   DiffType    // Type of difference
-	Value1 interface{} // Value from the first object
-	Value2 interface{} // Value from the second object
+	Path   string      `json:"path"`   // Path to the key where the difference was found
+	Type   DiffType    `json:"type"`   // Type of difference
+	Value1 interface{} `json:"value1"` // Value from the first object
+	Value2 interface{} `json:"value2"` // Value from the second object
 }
 
 // FindDifferences recursively compares two JSON objects and returns a list of differences

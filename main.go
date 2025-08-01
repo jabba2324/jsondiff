@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -26,6 +27,7 @@ func main() {
 	// Define flags
 	concisePtr := flag.Bool("concise", false, "Show concise output")
 	quietPtr := flag.Bool("quiet", false, "Only show if files differ, no details")
+	outputJSONPtr := flag.String("output-json", "", "Write differences to a JSON file")
 	keysOnlyPtr := flag.Bool("keys-only", false, "Only compare keys, ignore values")
 	ignoreCasePtr := flag.Bool("ignore-case", false, "Ignore case when comparing keys")
 	ignoreCaseValuesPtr := flag.Bool("ignore-case-values", false, "Ignore case when comparing string values")
@@ -96,6 +98,25 @@ func main() {
 
 	// Get differences based on options
 	differences := FindDifferences(jsonFile1.Data, jsonFile2.Data, "", *ignoreCasePtr, *ignoreCaseValuesPtr, *ignoreNumericTypePtr, *ignoreBooleanTypePtr, *ignoreNullValuesPtr, *keysOnlyPtr, regexMatches, levenshteinKeys, *levenshteinThresholdPtr)
+	
+	// Write differences to JSON file if requested
+	if *outputJSONPtr != "" {
+		outputJSON, err := json.MarshalIndent(differences, "", "  ")
+		if err != nil {
+			fmt.Printf("Error marshaling differences to JSON: %v\n", err)
+			os.Exit(1)
+		}
+		
+		err = os.WriteFile(*outputJSONPtr, outputJSON, 0644)
+		if err != nil {
+			fmt.Printf("Error writing differences to file: %v\n", err)
+			os.Exit(1)
+		}
+		
+		if !*quietPtr {
+			fmt.Printf("Differences written to %s\n", *outputJSONPtr)
+		}
+	}
 
 	// Check if files are identical
 	if len(differences) == 0 {
