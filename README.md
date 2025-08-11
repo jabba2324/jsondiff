@@ -23,9 +23,18 @@ A simple command-line tool to compare two JSON files and show their differences.
 
 ## Installation
 
+### Via Homebrew (macOS)
+
+```bash
+brew tap jabba2324/jsondiff
+brew install jsondiff
+```
+
+### From Source
+
 ```bash
 # Clone the repository
-git clone https://github.com/chrissewell/jsondiff.git
+git clone https://github.com/jabba2324/jsondiff.git
 cd jsondiff
 
 # Build the tool
@@ -35,8 +44,10 @@ go build -o jsondiff
 ## Usage
 
 ```bash
-./jsondiff [options] file1.json file2.json
+jsondiff [options] file1.json file2.json
 ```
+
+*Note: If installed from source, use `./jsondiff` instead of `jsondiff`*
 
 ### Options
 
